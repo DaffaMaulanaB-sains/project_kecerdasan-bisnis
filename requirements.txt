@@ -6,3 +6,4 @@ libpysal
 esda
 matplotlib
 shapely
+plotly
