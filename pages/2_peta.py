@@ -368,6 +368,11 @@ map_data = total_data.merge(stunting_data, on=group_col, how='left').fillna(0)
 map_data['prevalensi'] = (map_data['jumlah_stunting'] / map_data['total_balita'] * 100).round(2)
 map_data = map_data.sort_values('prevalensi', ascending=False)
 
+# Pastikan map_data tidak kosong
+if len(map_data) == 0:
+    st.warning("⚠️ Tidak ada data untuk filter yang dipilih")
+    st.stop()
+
 # ===================== METRICS =====================
 col1, col2, col3, col4 = st.columns(4)
 
@@ -435,6 +440,19 @@ gdf_map = gdf_active.merge(
     right_on=group_col,
     how='left'
 ).fillna(0)
+
+# FILTER GEODATA BERDASARKAN PILIHAN KECAMATAN/DESA
+if view_mode in ["🏘 Per Kecamatan", "🏠 Per Desa"] and selected_kecamatan and selected_kecamatan != 'Semua':
+    # Filter GeoDataFrame berdasarkan kecamatan yang dipilih
+    if view_mode == "🏘 Per Kecamatan":
+        # Untuk mode kecamatan, filter berdasarkan kecamatan yang dipilih
+        gdf_map = gdf_map[gdf_map[name_col] == selected_kecamatan.lower()]
+    elif view_mode == "🏠 Per Desa":
+        # Untuk mode desa, jika ada desa dipilih, filter berdasarkan desa
+        if selected_desa and selected_desa != 'Semua Desa':
+            gdf_map = gdf_map[gdf_map[name_col] == selected_desa.lower()]
+        # Jika tidak ada desa dipilih, tampilkan semua desa di kecamatan tersebut
+        # (akan dihandle oleh filtered_df yang sudah difilter sebelumnya)
 
 gdf_map = gdf_map.to_crs(epsg=4326)
 
