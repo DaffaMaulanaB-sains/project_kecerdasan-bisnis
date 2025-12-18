@@ -1,10 +1,7 @@
 # pages/2_Peta_Sebaran.py
 # ==========================================================
 # DASHBOARD PETA SEBARAN STUNTING KABUPATEN SIDOARJO
-# Gabungan Code 1 (Design Modern) + Code 2 (Logika Robust)
-# - Tidak error walau peta desa TIDAK ADA
-# - Mode desa otomatis nonaktif jika file tidak ditemukan
-# - Design modern dengan CSS styling
+# Versi Fixed: Notifikasi mode desa dihapus
 # ==========================================================
 
 import streamlit as st
@@ -14,7 +11,7 @@ import plotly.express as px
 import json
 from pathlib import Path
 
-st.set_page_config(page_title="Peta Sebaran Stunting", page_icon="🗺️", layout="wide")
+st.set_page_config(page_title="Peta Sebaran Stunting", page_icon="🗺", layout="wide")
 
 # ===================== CUSTOM CSS =====================
 st.markdown("""
@@ -234,8 +231,7 @@ def load_geojson_desa():
     if DESA_GEOJSON.exists():
         try:
             return gpd.read_file(DESA_GEOJSON)
-        except Exception as e:
-            st.warning(f"Peta desa tidak dapat dimuat: {e}")
+        except Exception:
             return None
     return None
 
@@ -251,7 +247,7 @@ if df is None or gdf_kecamatan is None:
 # ===================== HEADER =====================
 st.markdown("""
 <div class="main-header">
-    <h1>🗺️ Peta Prevalensi Stunting Kabupaten Sidoarjo</h1>
+    <h1>🗺 Peta Prevalensi Stunting Kabupaten Sidoarjo</h1>
     <p style="font-size: 1.1rem; margin-top: 0.5rem; opacity: 0.9;">
         Dashboard Interaktif Pemantauan & Analisis Data Stunting
     </p>
@@ -267,11 +263,9 @@ st.sidebar.markdown("""
 
 # View Mode Selection
 st.sidebar.markdown("### 🔍 Mode Tampilan")
-view_options = ["📍 Seluruh Sidoarjo", "🏘️ Per Kecamatan"]
+view_options = ["📍 Seluruh Sidoarjo", "🏘 Per Kecamatan"]
 if gdf_desa is not None:
     view_options.append("🏠 Per Desa")
-else:
-    st.sidebar.info("ℹ️ Mode Per Desa tidak tersedia (file peta desa tidak ditemukan)")
 
 view_mode = st.sidebar.radio("Pilih tingkat detail:", view_options)
 
@@ -279,8 +273,8 @@ view_mode = st.sidebar.radio("Pilih tingkat detail:", view_options)
 selected_kecamatan = None
 selected_desa = None
 
-if view_mode in ["🏘️ Per Kecamatan", "🏠 Per Desa"]:
-    st.sidebar.markdown("### 🏘️ Pilih Kecamatan")
+if view_mode in ["🏘 Per Kecamatan", "🏠 Per Desa"]:
+    st.sidebar.markdown("### 🏘 Pilih Kecamatan")
     kecamatan_list = ['Semua'] + sorted(df['nama_kecamatan'].dropna().unique().tolist())
     selected_kecamatan = st.sidebar.selectbox("Kecamatan:", kecamatan_list)
 
@@ -315,7 +309,7 @@ if selected_puskesmas != 'Semua':
 if gender_options:
     filtered_df = filtered_df[filtered_df['jenis_kelamin_balita'].isin(gender_options)]
 
-if view_mode in ["🏘️ Per Kecamatan", "🏠 Per Desa"] and selected_kecamatan and selected_kecamatan != 'Semua':
+if view_mode in ["🏘 Per Kecamatan", "🏠 Per Desa"] and selected_kecamatan and selected_kecamatan != 'Semua':
     filtered_df = filtered_df[filtered_df['nama_kecamatan'] == selected_kecamatan]
 
 if view_mode == "🏠 Per Desa" and selected_desa and selected_desa != 'Semua Desa':
@@ -335,7 +329,7 @@ else:
 
 # ===================== INFO BOX =====================
 view_info_text = "Menampilkan data seluruh Kabupaten Sidoarjo"
-if view_mode == "🏘️ Per Kecamatan":
+if view_mode == "🏘 Per Kecamatan":
     if selected_kecamatan == 'Semua':
         view_info_text = "Menampilkan data seluruh kecamatan di Kabupaten Sidoarjo"
     else:
@@ -394,7 +388,7 @@ with col1:
 with col2:
     st.markdown(f"""
     <div class="metric-card" style="border-top-color: #e74c3c;">
-        <div class="emoji-large">⚠️</div>
+        <div class="emoji-large">⚠</div>
         <div class="metric-value" style="color: #e74c3c;">{total_stunting:,}</div>
         <div class="metric-label">Kasus Stunting</div>
     </div>
@@ -425,7 +419,6 @@ name_col = None
 for c in geo_candidates:
     if c in gdf_active.columns:
         name_col = c
-        st.sidebar.success(f"✅ Kolom geo: **{c}**")
         break
 
 if name_col is None:
@@ -449,7 +442,7 @@ gdf_map = gdf_map.to_crs(epsg=4326)
 col_map, col_rank = st.columns([2, 1])
 
 with col_map:
-    st.markdown('<div class="section-header">🗺️ Peta Interaktif</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-header">🗺 Peta Interaktif</div>', unsafe_allow_html=True)
     
     # Calculate map center
     bounds = gdf_map.total_bounds
@@ -459,7 +452,7 @@ with col_map:
     # Determine zoom based on view mode
     if view_mode == "🏠 Per Desa" and selected_desa and selected_desa != 'Semua Desa':
         zoom_level = 12
-    elif view_mode in ["🏘️ Per Kecamatan", "🏠 Per Desa"] and selected_kecamatan and selected_kecamatan != 'Semua':
+    elif view_mode in ["🏘 Per Kecamatan", "🏠 Per Desa"] and selected_kecamatan and selected_kecamatan != 'Semua':
         zoom_level = 11
     else:
         zoom_level = 9.8
@@ -507,7 +500,7 @@ with col_map:
     st.plotly_chart(fig, use_container_width=True)
 
 with col_rank:
-    st.markdown(f'<div class="section-header">⚠️ Top 5 {display_name}</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="section-header">⚠ Top 5 {display_name}</div>', unsafe_allow_html=True)
     st.markdown(f"<p style='color: #718096; font-weight: 600;'>Berdasarkan Prevalensi Tertinggi</p>", unsafe_allow_html=True)
     
     top_5 = map_data.head(5)
