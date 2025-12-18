@@ -235,6 +235,7 @@ def load_geojson_desa():
         try:
             return gpd.read_file(DESA_GEOJSON)
         except Exception as e:
+            st.warning(f"Peta desa tidak dapat dimuat: {e}")
             return None
     return None
 
@@ -242,9 +243,6 @@ def load_geojson_desa():
 df = load_csv()
 gdf_kecamatan = load_geojson_kecamatan()
 gdf_desa = load_geojson_desa()
-
-# Check if desa mode is available
-DESA_MODE_AVAILABLE = gdf_desa is not None
 
 if df is None or gdf_kecamatan is None:
     st.error("❌ Data tidak dapat dimuat. Pastikan file CSV dan GeoJSON tersedia.")
@@ -270,8 +268,10 @@ st.sidebar.markdown("""
 # View Mode Selection
 st.sidebar.markdown("### 🔍 Mode Tampilan")
 view_options = ["📍 Seluruh Sidoarjo", "🏘️ Per Kecamatan"]
-if DESA_MODE_AVAILABLE:
+if gdf_desa is not None:
     view_options.append("🏠 Per Desa")
+else:
+    st.sidebar.info("ℹ️ Mode Per Desa tidak tersedia (file peta desa tidak ditemukan)")
 
 view_mode = st.sidebar.radio("Pilih tingkat detail:", view_options)
 
@@ -290,10 +290,7 @@ if view_mode == "🏠 Per Desa" and selected_kecamatan and selected_kecamatan !=
         df[df['nama_kecamatan'] == selected_kecamatan]['nama_desa']
         .dropna().unique().tolist()
     )
-    if desa_list:
-        selected_desa = st.sidebar.selectbox("Desa/Kelurahan:", ['Semua Desa'] + desa_list)
-    else:
-        st.sidebar.warning("⚠️ Tidak ada data desa untuk kecamatan ini")
+    selected_desa = st.sidebar.selectbox("Desa/Kelurahan:", ['Semua Desa'] + desa_list)
 
 st.sidebar.markdown("---")
 
@@ -325,10 +322,10 @@ if view_mode == "🏠 Per Desa" and selected_desa and selected_desa != 'Semua De
     filtered_df = filtered_df[filtered_df['nama_desa'] == selected_desa]
 
 # ===================== DETERMINE GROUP & GDF =====================
-if view_mode == "🏠 Per Desa" and DESA_MODE_AVAILABLE:
+if view_mode == "🏠 Per Desa":
     group_col = 'nama_desa'
     gdf_active = gdf_desa
-    geo_candidates = ['nama_desa', 'DESA', 'KELURAHAN', 'NAMOBJ', 'DESA_KELUR', 'WADMKD']
+    geo_candidates = ['nama_desa', 'DESA', 'KELURAHAN', 'NAMOBJ', 'DESA_KELUR']
     display_name = 'Desa/Kelurahan'
 else:
     group_col = 'nama_kecamatan'
@@ -428,6 +425,7 @@ name_col = None
 for c in geo_candidates:
     if c in gdf_active.columns:
         name_col = c
+        st.sidebar.success(f"✅ Kolom geo: **{c}**")
         break
 
 if name_col is None:
@@ -460,11 +458,11 @@ with col_map:
     
     # Determine zoom based on view mode
     if view_mode == "🏠 Per Desa" and selected_desa and selected_desa != 'Semua Desa':
-        zoom_level = 13
+        zoom_level = 12
     elif view_mode in ["🏘️ Per Kecamatan", "🏠 Per Desa"] and selected_kecamatan and selected_kecamatan != 'Semua':
         zoom_level = 11
     else:
-        zoom_level = 10
+        zoom_level = 9.8
     
     # Create map
     fig = px.choropleth_mapbox(
@@ -490,20 +488,19 @@ with col_map:
         }
     )
     
-    fig.update_traces(marker_line_width=1.5, marker_line_color='white')
+    fig.update_traces(marker_line_width=1, marker_line_color='white')
     fig.update_layout(
         height=700,
         margin=dict(l=0, r=0, t=0, b=0),
         coloraxis_colorbar=dict(
             title=dict(
                 text="Prevalensi<br>Stunting (%)",
-                font=dict(size=14, family="Inter", weight="bold")
+                font=dict(size=14, family="Inter")
             ),
-            thickness=22,
+            thickness=20,
             len=0.7,
             x=0.02,
-            xanchor="left",
-            tickfont=dict(size=12)
+            xanchor="left"
         )
     )
     
@@ -511,37 +508,34 @@ with col_map:
 
 with col_rank:
     st.markdown(f'<div class="section-header">⚠️ Top 5 {display_name}</div>', unsafe_allow_html=True)
-    st.markdown(f"<p style='color: #718096; font-weight: 600; margin-bottom: 1rem;'>Berdasarkan Prevalensi Tertinggi</p>", unsafe_allow_html=True)
+    st.markdown(f"<p style='color: #718096; font-weight: 600;'>Berdasarkan Prevalensi Tertinggi</p>", unsafe_allow_html=True)
     
     top_5 = map_data.head(5)
     rank_classes = ['rank-1', 'rank-2', 'rank-3', 'rank-4', 'rank-5']
     rank_emojis = ['🔴', '🟠', '🟡', '🟢', '🔵']
     
-    if len(top_5) == 0:
-        st.warning("⚠️ Tidak ada data untuk ditampilkan")
-    else:
-        for idx, (_, row) in enumerate(top_5.iterrows()):
-            rank = idx + 1
-            rank_class = rank_classes[idx] if idx < len(rank_classes) else 'rank-5'
-            rank_emoji = rank_emojis[idx] if idx < len(rank_emojis) else '🔴'
-            
-            area_name = row[group_col]
-            
-            st.markdown(f"""
-            <div class="top-kecamatan-card {rank_class}">
-                <div class="rank-badge">#{rank}</div>
-                <div style="display: flex; align-items: center; gap: 1.5rem; padding-right: 3rem;">
-                    <span class="emoji-large">{rank_emoji}</span>
-                    <div style="flex: 1;">
-                        <div class="kecamatan-name">{area_name.upper()}</div>
-                        <div class="percentage">{row['prevalensi']:.2f}%</div>
-                        <div class="count-info">
-                            💉 {int(row['jumlah_stunting'])} dari {int(row['total_balita'])} balita
-                        </div>
+    for idx, (_, row) in enumerate(top_5.iterrows()):
+        rank = idx + 1
+        rank_class = rank_classes[idx] if idx < len(rank_classes) else 'rank-5'
+        rank_emoji = rank_emojis[idx] if idx < len(rank_emojis) else '🔴'
+        
+        area_name = row[group_col]
+        
+        st.markdown(f"""
+        <div class="top-kecamatan-card {rank_class}">
+            <div class="rank-badge">#{rank}</div>
+            <div style="display: flex; align-items: center; gap: 1.5rem; padding-right: 3rem;">
+                <span class="emoji-large">{rank_emoji}</span>
+                <div style="flex: 1;">
+                    <div class="kecamatan-name">{area_name.upper()}</div>
+                    <div class="percentage">{row['prevalensi']:.2f}%</div>
+                    <div class="count-info">
+                        💉 {int(row['jumlah_stunting'])} dari {int(row['total_balita'])} balita
                     </div>
                 </div>
             </div>
-            """, unsafe_allow_html=True)
+        </div>
+        """, unsafe_allow_html=True)
 
 # ===================== DATA TABLE =====================
 st.markdown(f'<div class="section-header">📋 Data Lengkap per {display_name}</div>', unsafe_allow_html=True)
@@ -617,8 +611,7 @@ with col_dl1:
         label="📥 Download Data CSV",
         data=csv,
         file_name=f"prevalensi_stunting_sidoarjo_{pd.Timestamp.now().strftime('%Y%m%d')}.csv",
-        mime="text/csv",
-        use_container_width=True
+        mime="text/csv"
     )
 
 with col_dl2:
@@ -632,11 +625,10 @@ with col_dl2:
             label="📊 Download Data Excel",
             data=buffer.getvalue(),
             file_name=f"prevalensi_stunting_sidoarjo_{pd.Timestamp.now().strftime('%Y%m%d')}.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            use_container_width=True
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
-    except ImportError:
-        st.info("💡 Install openpyxl untuk download Excel: `pip install openpyxl`")
+    except:
+        st.info("Install openpyxl untuk download Excel: pip install openpyxl")
 
 # ===================== FOOTER =====================
 st.markdown("---")
@@ -648,3 +640,5 @@ st.markdown("""
     <p style="font-size: 0.8rem; margin-top: 0.5rem;">
         Data diperbarui secara berkala | Untuk informasi lebih lanjut hubungi Dinas Kesehatan Sidoarjo
     </p>
+</div>
+""", unsafe_allow_html=True)
