@@ -1,644 +1,854 @@
-# pages/2_Peta_Sebaran.py
-# ==========================================================
-# DASHBOARD PETA SEBARAN STUNTING KABUPATEN SIDOARJO
-# Gabungan Code 1 (Design Modern) + Code 2 (Logika Robust)
-# - Tidak error walau peta desa TIDAK ADA
-# - Mode desa otomatis nonaktif jika file tidak ditemukan
-# - Design modern dengan CSS styling
-# ==========================================================
-
+# pages/3_Analisis_Mendalam.py
 import streamlit as st
 import pandas as pd
-import geopandas as gpd
 import plotly.express as px
-import json
-from pathlib import Path
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
+from datetime import datetime
+import numpy as np
 
-st.set_page_config(page_title="Peta Sebaran Stunting", page_icon="🗺️", layout="wide")
+st.set_page_config(page_title="Analisis Stunting", page_icon="📈", layout="wide")
 
-# ===================== CUSTOM CSS =====================
-st.markdown("""
-<style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
-    
-    * {
-        font-family: 'Inter', sans-serif;
-    }
-    
-    .main {
-        background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
-    }
-    
-    .main-header {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        padding: 2rem;
-        border-radius: 1rem;
-        color: white;
-        text-align: center;
-        margin-bottom: 2rem;
-        box-shadow: 0 10px 30px rgba(0,0,0,0.2);
-    }
-    
-    .main-header h1 {
-        font-size: 2.5rem;
-        font-weight: 800;
-        margin: 0;
-        text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
-    }
-    
-    .top-kecamatan-card {
-        background: white;
-        padding: 1.5rem;
-        border-radius: 1rem;
-        margin: 1rem 0;
-        box-shadow: 0 8px 16px rgba(0,0,0,0.1);
-        border-left: 6px solid;
-        transition: all 0.3s ease;
-        position: relative;
-        overflow: hidden;
-    }
-    
-    .top-kecamatan-card:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 12px 24px rgba(0,0,0,0.15);
-    }
-    
-    .rank-badge {
-        position: absolute;
-        top: 1rem;
-        right: 1rem;
-        background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-        color: white;
-        padding: 0.5rem 1rem;
-        border-radius: 2rem;
-        font-weight: 700;
-        font-size: 0.9rem;
-        box-shadow: 0 4px 8px rgba(0,0,0,0.2);
-    }
-    
-    .kecamatan-name {
-        font-size: 1.4rem;
-        font-weight: 700;
-        color: #2d3748;
-        margin: 0.5rem 0;
-        letter-spacing: 0.5px;
-    }
-    
-    .percentage {
-        font-size: 2.2rem;
-        font-weight: 800;
-        background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        background-clip: text;
-    }
-    
-    .count-info {
-        color: #718096;
-        font-size: 1rem;
-        font-weight: 500;
-        margin-top: 0.5rem;
-    }
-    
-    .rank-1 { border-left-color: #c0392b; background: linear-gradient(135deg, #ffeaea 0%, #ffe0e0 100%); }
-    .rank-2 { border-left-color: #e74c3c; background: linear-gradient(135deg, #fff5f5 0%, #ffebeb 100%); }
-    .rank-3 { border-left-color: #f39c12; background: linear-gradient(135deg, #fff9f0 0%, #fff3e0 100%); }
-    .rank-4 { border-left-color: #f1c40f; background: linear-gradient(135deg, #fffef0 0%, #fffacd 100%); }
-    .rank-5 { border-left-color: #e67e22; background: linear-gradient(135deg, #fff8f0 0%, #ffe4d4 100%); }
-    
-    .metric-card {
-        background: white;
-        padding: 1.5rem;
-        border-radius: 1rem;
-        text-align: center;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-        transition: all 0.3s ease;
-        border-top: 4px solid #667eea;
-    }
-    
-    .metric-card:hover {
-        transform: translateY(-3px);
-        box-shadow: 0 8px 20px rgba(0,0,0,0.15);
-    }
-    
-    .metric-value {
-        font-size: 2.5rem;
-        font-weight: 800;
-        color: #667eea;
-        margin: 0.5rem 0;
-    }
-    
-    .metric-label {
-        font-size: 0.95rem;
-        color: #718096;
-        font-weight: 600;
-        text-transform: uppercase;
-        letter-spacing: 1px;
-    }
-    
-    .emoji-large {
-        font-size: 3rem;
-        filter: drop-shadow(2px 2px 4px rgba(0,0,0,0.2));
-    }
-    
-    .section-header {
-        font-size: 1.8rem;
-        font-weight: 700;
-        color: #2d3748;
-        margin: 2rem 0 1rem 0;
-        padding-bottom: 0.5rem;
-        border-bottom: 3px solid #667eea;
-        display: flex;
-        align-items: center;
-        gap: 0.75rem;
-    }
-    
-    .info-box {
-        background: linear-gradient(135deg, #e0f2fe 0%, #bae6fd 100%);
-        padding: 1.5rem;
-        border-radius: 1rem;
-        border-left: 5px solid #0284c7;
-        margin: 1rem 0;
-        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-    }
-    
-    .info-box-text {
-        color: #0c4a6e;
-        font-weight: 600;
-        font-size: 1rem;
-        line-height: 1.6;
-    }
-    
-    .legend-container {
-        background: white;
-        padding: 1.5rem;
-        border-radius: 1rem;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-        margin: 1.5rem 0;
-    }
-    
-    .legend-item {
-        display: flex;
-        align-items: center;
-        gap: 1rem;
-        padding: 0.75rem;
-        margin: 0.5rem 0;
-        border-radius: 0.5rem;
-        transition: all 0.2s ease;
-    }
-    
-    .legend-item:hover {
-        background: #f7fafc;
-        transform: translateX(5px);
-    }
-    
-    .legend-color {
-        width: 40px;
-        height: 40px;
-        border-radius: 0.5rem;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-    }
-    
-    .legend-text {
-        font-weight: 600;
-        color: #2d3748;
-    }
-</style>
-""", unsafe_allow_html=True)
-
-# ===================== PATH CONFIGURATION =====================
-DATA_DIR = Path("data")
-CSV_PATH = DATA_DIR / "data_skrinning_stunting(1).csv"
-KEC_GEOJSON = DATA_DIR / "peta_sidoarjo.geojson"
-DESA_GEOJSON = DATA_DIR / "peta_sidoarjo_desa.geojson"
-
-# ===================== LOAD DATA FUNCTIONS =====================
 @st.cache_data
-def load_csv():
+def load_data():
     try:
-        return pd.read_csv(CSV_PATH)
+        df = pd.read_csv('data/data_skrinning_stunting(1).csv')
+        df['tgl_pengambilan_data'] = pd.to_datetime(df['tgl_pengambilan_data'], format='%m/%d/%Y', errors='coerce')
+        return df
     except Exception as e:
-        st.error(f"Error loading CSV: {e}")
+        st.error(f"Error: {e}")
         return None
 
-@st.cache_data
-def load_geojson_kecamatan():
-    try:
-        return gpd.read_file(KEC_GEOJSON)
-    except Exception as e:
-        st.error(f"Error loading GeoJSON Kecamatan: {e}")
-        return None
+df = load_data()
 
-@st.cache_data
-def load_geojson_desa():
-    if DESA_GEOJSON.exists():
-        try:
-            return gpd.read_file(DESA_GEOJSON)
-        except Exception as e:
-            st.warning(f"Peta desa tidak dapat dimuat: {e}")
-            return None
-    return None
-
-# ===================== INITIALIZE DATA =====================
-df = load_csv()
-gdf_kecamatan = load_geojson_kecamatan()
-gdf_desa = load_geojson_desa()
-
-if df is None or gdf_kecamatan is None:
-    st.error("❌ Data tidak dapat dimuat. Pastikan file CSV dan GeoJSON tersedia.")
-    st.stop()
-
-# ===================== HEADER =====================
-st.markdown("""
-<div class="main-header">
-    <h1>🗺️ Peta Prevalensi Stunting Kabupaten Sidoarjo</h1>
-    <p style="font-size: 1.1rem; margin-top: 0.5rem; opacity: 0.9;">
-        Dashboard Interaktif Pemantauan & Analisis Data Stunting
-    </p>
-</div>
-""", unsafe_allow_html=True)
-
-# ===================== SIDEBAR =====================
-st.sidebar.markdown("""
-<div style="text-align: center; padding: 1rem; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 1rem; margin-bottom: 1.5rem;">
-    <h2 style="color: white; margin: 0; font-size: 1.5rem;">🎯 Panel Filter</h2>
-</div>
-""", unsafe_allow_html=True)
-
-# View Mode Selection
-st.sidebar.markdown("### 🔍 Mode Tampilan")
-view_options = ["📍 Seluruh Sidoarjo", "🏘️ Per Kecamatan"]
-if gdf_desa is not None:
-    view_options.append("🏠 Per Desa")
-else:
-    st.sidebar.info("ℹ️ Mode Per Desa tidak tersedia (file peta desa tidak ditemukan)")
-
-view_mode = st.sidebar.radio("Pilih tingkat detail:", view_options)
-
-# Conditional Filters
-selected_kecamatan = None
-selected_desa = None
-
-if view_mode in ["🏘️ Per Kecamatan", "🏠 Per Desa"]:
-    st.sidebar.markdown("### 🏘️ Pilih Kecamatan")
+if df is not None:
+    st.title("📈 Analisis Mendalam Status Stunting")
+    
+    # Sidebar
+    st.sidebar.header("⚙️ Pengaturan Analisis")
+    
+    analysis_type = st.sidebar.selectbox(
+        "Pilih Jenis Analisis",
+        ["Z-Score Analysis", "Status Gizi", "Perbandingan Puskesmas", "Tren Temporal"]
+    )
+    
+    # Filters
     kecamatan_list = ['Semua'] + sorted(df['nama_kecamatan'].dropna().unique().tolist())
-    selected_kecamatan = st.sidebar.selectbox("Kecamatan:", kecamatan_list)
-
-if view_mode == "🏠 Per Desa" and selected_kecamatan and selected_kecamatan != 'Semua':
-    st.sidebar.markdown("### 🏠 Pilih Desa")
-    desa_list = sorted(
-        df[df['nama_kecamatan'] == selected_kecamatan]['nama_desa']
-        .dropna().unique().tolist()
-    )
-    selected_desa = st.sidebar.selectbox("Desa/Kelurahan:", ['Semua Desa'] + desa_list)
-
-st.sidebar.markdown("---")
-
-# Other Filters
-st.sidebar.markdown("### 🏥 Filter Puskesmas")
-puskesmas_list = ['Semua'] + sorted(df['nama_puskesmas'].dropna().unique().tolist())
-selected_puskesmas = st.sidebar.selectbox("Puskesmas:", puskesmas_list)
-
-st.sidebar.markdown("### 👶 Jenis Kelamin")
-gender_options = st.sidebar.multiselect(
-    "Pilih:",
-    options=df['jenis_kelamin_balita'].unique().tolist(),
-    default=df['jenis_kelamin_balita'].unique().tolist()
-)
-
-# ===================== APPLY FILTERS =====================
-filtered_df = df.copy()
-
-if selected_puskesmas != 'Semua':
-    filtered_df = filtered_df[filtered_df['nama_puskesmas'] == selected_puskesmas]
-
-if gender_options:
-    filtered_df = filtered_df[filtered_df['jenis_kelamin_balita'].isin(gender_options)]
-
-if view_mode in ["🏘️ Per Kecamatan", "🏠 Per Desa"] and selected_kecamatan and selected_kecamatan != 'Semua':
-    filtered_df = filtered_df[filtered_df['nama_kecamatan'] == selected_kecamatan]
-
-if view_mode == "🏠 Per Desa" and selected_desa and selected_desa != 'Semua Desa':
-    filtered_df = filtered_df[filtered_df['nama_desa'] == selected_desa]
-
-# ===================== DETERMINE GROUP & GDF =====================
-if view_mode == "🏠 Per Desa":
-    group_col = 'nama_desa'
-    gdf_active = gdf_desa
-    geo_candidates = ['nama_desa', 'DESA', 'KELURAHAN', 'NAMOBJ', 'DESA_KELUR']
-    display_name = 'Desa/Kelurahan'
-else:
-    group_col = 'nama_kecamatan'
-    gdf_active = gdf_kecamatan
-    geo_candidates = ['nama_kecamatan', 'KECAMATAN', 'WADMKC', 'NAMOBJ']
-    display_name = 'Kecamatan'
-
-# ===================== INFO BOX =====================
-view_info_text = "Menampilkan data seluruh Kabupaten Sidoarjo"
-if view_mode == "🏘️ Per Kecamatan":
-    if selected_kecamatan == 'Semua':
-        view_info_text = "Menampilkan data seluruh kecamatan di Kabupaten Sidoarjo"
-    else:
-        view_info_text = f"Menampilkan data untuk Kecamatan <strong>{selected_kecamatan}</strong>"
-elif view_mode == "🏠 Per Desa":
-    if not selected_kecamatan or selected_kecamatan == 'Semua':
-        view_info_text = "Menampilkan data seluruh desa di Kabupaten Sidoarjo"
-    elif selected_desa and selected_desa != 'Semua Desa':
-        view_info_text = f"Menampilkan data untuk Desa <strong>{selected_desa}</strong>, Kecamatan <strong>{selected_kecamatan}</strong>"
-    else:
-        view_info_text = f"Menampilkan seluruh desa di Kecamatan <strong>{selected_kecamatan}</strong>"
-
-st.markdown(f"""
-<div class="info-box">
-    <div class="info-box-text">
-        📍 {view_info_text}
-    </div>
-</div>
-""", unsafe_allow_html=True)
-
-# ===================== AGGREGATE DATA =====================
-stunting_data = (
-    filtered_df[filtered_df['stunting_balita'] == 'Ya']
-    .groupby(group_col)
-    .size()
-    .reset_index(name='jumlah_stunting')
-)
-
-total_data = (
-    filtered_df.groupby(group_col)
-    .size()
-    .reset_index(name='total_balita')
-)
-
-map_data = total_data.merge(stunting_data, on=group_col, how='left').fillna(0)
-map_data['prevalensi'] = (map_data['jumlah_stunting'] / map_data['total_balita'] * 100).round(2)
-map_data = map_data.sort_values('prevalensi', ascending=False)
-
-# ===================== METRICS =====================
-col1, col2, col3, col4 = st.columns(4)
-
-total_balita = int(map_data['total_balita'].sum())
-total_stunting = int(map_data['jumlah_stunting'].sum())
-avg_prevalensi = map_data['prevalensi'].mean() if len(map_data) > 0 else 0
-jumlah_wilayah = len(map_data)
-
-with col1:
-    st.markdown(f"""
-    <div class="metric-card">
-        <div class="emoji-large">👶</div>
-        <div class="metric-value">{total_balita:,}</div>
-        <div class="metric-label">Total Balita</div>
-    </div>
-    """, unsafe_allow_html=True)
-
-with col2:
-    st.markdown(f"""
-    <div class="metric-card" style="border-top-color: #e74c3c;">
-        <div class="emoji-large">⚠️</div>
-        <div class="metric-value" style="color: #e74c3c;">{total_stunting:,}</div>
-        <div class="metric-label">Kasus Stunting</div>
-    </div>
-    """, unsafe_allow_html=True)
-
-with col3:
-    st.markdown(f"""
-    <div class="metric-card" style="border-top-color: #f39c12;">
-        <div class="emoji-large">📊</div>
-        <div class="metric-value" style="color: #f39c12;">{avg_prevalensi:.2f}%</div>
-        <div class="metric-label">Rata-rata Prevalensi</div>
-    </div>
-    """, unsafe_allow_html=True)
-
-with col4:
-    st.markdown(f"""
-    <div class="metric-card" style="border-top-color: #2ecc71;">
-        <div class="emoji-large">📍</div>
-        <div class="metric-value" style="color: #2ecc71;">{jumlah_wilayah}</div>
-        <div class="metric-label">Jumlah {display_name}</div>
-    </div>
-    """, unsafe_allow_html=True)
-
-st.markdown("<br>", unsafe_allow_html=True)
-
-# ===================== MERGE WITH GEODATAFRAME =====================
-name_col = None
-for c in geo_candidates:
-    if c in gdf_active.columns:
-        name_col = c
-        st.sidebar.success(f"✅ Kolom geo: **{c}**")
-        break
-
-if name_col is None:
-    st.error(f"❌ Kolom nama wilayah tidak ditemukan pada GeoJSON. Tersedia: {list(gdf_active.columns)}")
-    st.stop()
-
-# Normalize names for matching
-gdf_active[name_col] = gdf_active[name_col].astype(str).str.strip().str.lower()
-map_data[group_col] = map_data[group_col].astype(str).str.strip().str.lower()
-
-gdf_map = gdf_active.merge(
-    map_data,
-    left_on=name_col,
-    right_on=group_col,
-    how='left'
-).fillna(0)
-
-gdf_map = gdf_map.to_crs(epsg=4326)
-
-# ===================== LAYOUT: MAP + RANKING =====================
-col_map, col_rank = st.columns([2, 1])
-
-with col_map:
-    st.markdown('<div class="section-header">🗺️ Peta Interaktif</div>', unsafe_allow_html=True)
+    selected_kecamatan = st.sidebar.selectbox("Kecamatan", kecamatan_list)
     
-    # Calculate map center
-    bounds = gdf_map.total_bounds
-    center_lat = (bounds[1] + bounds[3]) / 2
-    center_lon = (bounds[0] + bounds[2]) / 2
+    filtered_df = df.copy()
+    if selected_kecamatan != 'Semua':
+        filtered_df = filtered_df[filtered_df['nama_kecamatan'] == selected_kecamatan]
     
-    # Determine zoom based on view mode
-    if view_mode == "🏠 Per Desa" and selected_desa and selected_desa != 'Semua Desa':
-        zoom_level = 12
-    elif view_mode in ["🏘️ Per Kecamatan", "🏠 Per Desa"] and selected_kecamatan and selected_kecamatan != 'Semua':
-        zoom_level = 11
-    else:
-        zoom_level = 9.8
+    # Analysis sections
+    if analysis_type == "Z-Score Analysis":
+        st.markdown("### 📊 Analisis Z-Score")
+        
+        # Info box yang lebih menarik
+        st.info("""
+        **Z-Score** mengukur seberapa jauh nilai individu dari rata-rata populasi (dalam satuan standar deviasi).
+        
+        📏 **Interpretasi Z-Score:**
+        - **Z < -3**: Sangat Pendek/Sangat Kurang (Severe)
+        - **-3 ≤ Z < -2**: Pendek/Kurang (Moderate)
+        - **-2 ≤ Z ≤ +2**: Normal
+        - **Z > +2**: Tinggi/Lebih (di atas normal)
+        """)
+        
+        # Metrics ringkasan
+        col_m1, col_m2, col_m3, col_m4 = st.columns(4)
+        
+        severe_stunting = len(filtered_df[filtered_df['zsc_tbu'] < -3])
+        moderate_stunting = len(filtered_df[(filtered_df['zsc_tbu'] >= -3) & (filtered_df['zsc_tbu'] < -2)])
+        normal = len(filtered_df[(filtered_df['zsc_tbu'] >= -2) & (filtered_df['zsc_tbu'] <= 2)])
+        
+        col_m1.metric("🔴 Sangat Pendek", severe_stunting, 
+                     delta=f"{(severe_stunting/len(filtered_df)*100):.1f}%", delta_color="inverse")
+        col_m2.metric("🟠 Pendek", moderate_stunting,
+                     delta=f"{(moderate_stunting/len(filtered_df)*100):.1f}%", delta_color="inverse")
+        col_m3.metric("🟢 Normal", normal,
+                     delta=f"{(normal/len(filtered_df)*100):.1f}%", delta_color="normal")
+        col_m4.metric("📊 Total Sampel", len(filtered_df))
+        
+        st.markdown("---")
+        
+        # Scatter plots dengan styling yang lebih baik
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.markdown("#### 📍 Z-Score TB/U vs BB/TB")
+            st.caption("Hubungan antara tinggi badan dan berat badan balita")
+            
+            fig_scatter = px.scatter(
+                filtered_df,
+                x='zsc_tbu',
+                y='zsc_bbtb',
+                color='stunting_balita',
+                size='bb_balita',
+                hover_data={
+                    'nama_balita': True,
+                    'umur_balita': True,
+                    'jenis_kelamin_balita': True,
+                    'nama_kecamatan': True,
+                    'zsc_tbu': ':.2f',
+                    'zsc_bbtb': ':.2f',
+                    'bb_balita': ':.1f'
+                },
+                labels={
+                    'zsc_tbu': 'Z-Score TB/U (Tinggi/Umur)',
+                    'zsc_bbtb': 'Z-Score BB/TB (Berat/Tinggi)',
+                    'stunting_balita': 'Status Stunting'
+                },
+                color_discrete_map={'Ya': '#e74c3c', 'Tidak': '#2ecc71'},
+                opacity=0.7
+            )
+            
+            # Garis referensi yang lebih jelas
+            fig_scatter.add_hline(y=-2, line_dash="dash", line_color="red", line_width=2,
+                                 annotation_text="Gizi Kurang", annotation_position="right",
+                                 annotation=dict(font_size=12, font_color="red"))
+            fig_scatter.add_vline(x=-2, line_dash="dash", line_color="red", line_width=2,
+                                 annotation_text="Stunting", annotation_position="top",
+                                 annotation=dict(font_size=12, font_color="red"))
+            fig_scatter.add_hline(y=-3, line_dash="dot", line_color="darkred", line_width=1.5,
+                                 annotation_text="Gizi Buruk", annotation_position="right",
+                                 annotation=dict(font_size=10, font_color="darkred"))
+            fig_scatter.add_vline(x=-3, line_dash="dot", line_color="darkred", line_width=1.5,
+                                 annotation_text="Sangat Pendek", annotation_position="top",
+                                 annotation=dict(font_size=10, font_color="darkred"))
+            
+            # Shaded regions untuk zona bahaya
+            fig_scatter.add_shape(type="rect", x0=-6, y0=-6, x1=-2, y1=-2,
+                                fillcolor="red", opacity=0.1, layer="below", line_width=0)
+            
+            fig_scatter.update_layout(
+                height=500,
+                template="plotly_white",
+                hovermode='closest',
+                legend=dict(
+                    orientation="h",
+                    yanchor="bottom",
+                    y=1.02,
+                    xanchor="right",
+                    x=1
+                )
+            )
+            
+            st.plotly_chart(fig_scatter, use_container_width=True)
+        
+        with col2:
+            st.markdown("#### 📍 Z-Score TB/U vs BB/U")
+            st.caption("Perbandingan tinggi dan berat badan berdasarkan umur")
+            
+            fig_scatter2 = px.scatter(
+                filtered_df,
+                x='zsc_tbu',
+                y='zsc_bbu',
+                color='jenis_kelamin_balita',
+                size='tb_balita',
+                hover_data={
+                    'nama_balita': True,
+                    'umur_balita': True,
+                    'stunting_balita': True,
+                    'nama_kecamatan': True,
+                    'zsc_tbu': ':.2f',
+                    'zsc_bbu': ':.2f',
+                    'tb_balita': ':.1f'
+                },
+                labels={
+                    'zsc_tbu': 'Z-Score TB/U (Tinggi/Umur)',
+                    'zsc_bbu': 'Z-Score BB/U (Berat/Umur)',
+                    'jenis_kelamin_balita': 'Jenis Kelamin'
+                },
+                color_discrete_map={'Laki - Laki': '#3498db', 'Perempuan': '#e91e63'},
+                opacity=0.7
+            )
+            
+            fig_scatter2.add_hline(y=-2, line_dash="dash", line_color="red", line_width=2,
+                                  annotation_text="BB Kurang", annotation_position="right",
+                                  annotation=dict(font_size=12, font_color="red"))
+            fig_scatter2.add_vline(x=-2, line_dash="dash", line_color="red", line_width=2,
+                                  annotation_text="Stunting", annotation_position="top",
+                                  annotation=dict(font_size=12, font_color="red"))
+            
+            fig_scatter2.add_shape(type="rect", x0=-6, y0=-6, x1=-2, y1=-2,
+                                 fillcolor="red", opacity=0.1, layer="below", line_width=0)
+            
+            fig_scatter2.update_layout(
+                height=500,
+                template="plotly_white",
+                hovermode='closest',
+                legend=dict(
+                    orientation="h",
+                    yanchor="bottom",
+                    y=1.02,
+                    xanchor="right",
+                    x=1
+                )
+            )
+            
+            st.plotly_chart(fig_scatter2, use_container_width=True)
+        
+        st.markdown("---")
+        
+        # Distribution dengan styling yang lebih baik
+        st.markdown("### 📊 Distribusi Z-Score")
+        st.caption("Histogram menunjukkan sebaran nilai Z-Score pada populasi balita")
+        
+        col3, col4, col5 = st.columns(3)
+        
+        with col3:
+            fig_hist_tbu = go.Figure()
+            
+            fig_hist_tbu.add_trace(go.Histogram(
+                x=filtered_df['zsc_tbu'],
+                nbinsx=40,
+                marker_color='#3498db',
+                opacity=0.75,
+                name='TB/U',
+                hovertemplate='Z-Score: %{x:.2f}<br>Jumlah: %{y}<extra></extra>'
+            ))
+            
+            fig_hist_tbu.add_vline(x=-2, line_dash="dash", line_color="red", line_width=3,
+                                  annotation_text="Batas Stunting", annotation_position="top")
+            fig_hist_tbu.add_vline(x=-3, line_dash="dot", line_color="darkred", line_width=2,
+                                  annotation_text="Sangat Pendek", annotation_position="bottom")
+            fig_hist_tbu.add_vline(x=filtered_df['zsc_tbu'].mean(), line_dash="solid", 
+                                  line_color="green", line_width=2,
+                                  annotation_text=f"Mean: {filtered_df['zsc_tbu'].mean():.2f}",
+                                  annotation_position="top")
+            
+            fig_hist_tbu.update_layout(
+                title="Distribusi Z-Score TB/U",
+                xaxis_title="Z-Score TB/U",
+                yaxis_title="Frekuensi",
+                template="plotly_white",
+                height=400,
+                showlegend=False
+            )
+            
+            st.plotly_chart(fig_hist_tbu, use_container_width=True)
+            
+            # Stats
+            st.metric("Mean Z-Score TB/U", f"{filtered_df['zsc_tbu'].mean():.2f}")
+            st.metric("Std Dev", f"{filtered_df['zsc_tbu'].std():.2f}")
+        
+        with col4:
+            fig_hist_bbtb = go.Figure()
+            
+            fig_hist_bbtb.add_trace(go.Histogram(
+                x=filtered_df['zsc_bbtb'],
+                nbinsx=40,
+                marker_color='#2ecc71',
+                opacity=0.75,
+                name='BB/TB',
+                hovertemplate='Z-Score: %{x:.2f}<br>Jumlah: %{y}<extra></extra>'
+            ))
+            
+            fig_hist_bbtb.add_vline(x=-2, line_dash="dash", line_color="red", line_width=3,
+                                   annotation_text="Batas Gizi Kurang", annotation_position="top")
+            fig_hist_bbtb.add_vline(x=-3, line_dash="dot", line_color="darkred", line_width=2,
+                                   annotation_text="Gizi Buruk", annotation_position="bottom")
+            fig_hist_bbtb.add_vline(x=filtered_df['zsc_bbtb'].mean(), line_dash="solid",
+                                   line_color="green", line_width=2,
+                                   annotation_text=f"Mean: {filtered_df['zsc_bbtb'].mean():.2f}",
+                                   annotation_position="top")
+            
+            fig_hist_bbtb.update_layout(
+                title="Distribusi Z-Score BB/TB",
+                xaxis_title="Z-Score BB/TB",
+                yaxis_title="Frekuensi",
+                template="plotly_white",
+                height=400,
+                showlegend=False
+            )
+            
+            st.plotly_chart(fig_hist_bbtb, use_container_width=True)
+            
+            st.metric("Mean Z-Score BB/TB", f"{filtered_df['zsc_bbtb'].mean():.2f}")
+            st.metric("Std Dev", f"{filtered_df['zsc_bbtb'].std():.2f}")
+        
+        with col5:
+            fig_hist_bbu = go.Figure()
+            
+            fig_hist_bbu.add_trace(go.Histogram(
+                x=filtered_df['zsc_bbu'],
+                nbinsx=40,
+                marker_color='#f39c12',
+                opacity=0.75,
+                name='BB/U',
+                hovertemplate='Z-Score: %{x:.2f}<br>Jumlah: %{y}<extra></extra>'
+            ))
+            
+            fig_hist_bbu.add_vline(x=-2, line_dash="dash", line_color="red", line_width=3,
+                                  annotation_text="Batas BB Kurang", annotation_position="top")
+            fig_hist_bbu.add_vline(x=-3, line_dash="dot", line_color="darkred", line_width=2,
+                                  annotation_text="BB Sangat Kurang", annotation_position="bottom")
+            fig_hist_bbu.add_vline(x=filtered_df['zsc_bbu'].mean(), line_dash="solid",
+                                  line_color="green", line_width=2,
+                                  annotation_text=f"Mean: {filtered_df['zsc_bbu'].mean():.2f}",
+                                  annotation_position="top")
+            
+            fig_hist_bbu.update_layout(
+                title="Distribusi Z-Score BB/U",
+                xaxis_title="Z-Score BB/U",
+                yaxis_title="Frekuensi",
+                template="plotly_white",
+                height=400,
+                showlegend=False
+            )
+            
+            st.plotly_chart(fig_hist_bbu, use_container_width=True)
+            
+            st.metric("Mean Z-Score BB/U", f"{filtered_df['zsc_bbu'].mean():.2f}")
+            st.metric("Std Dev", f"{filtered_df['zsc_bbu'].std():.2f}")
+        
+        # Box plot perbandingan
+        st.markdown("---")
+        st.markdown("### 📦 Perbandingan Distribusi Z-Score")
+        
+        fig_box = go.Figure()
+        
+        fig_box.add_trace(go.Box(y=filtered_df['zsc_tbu'], name='TB/U',
+                                marker_color='#3498db', boxmean='sd'))
+        fig_box.add_trace(go.Box(y=filtered_df['zsc_bbtb'], name='BB/TB',
+                                marker_color='#2ecc71', boxmean='sd'))
+        fig_box.add_trace(go.Box(y=filtered_df['zsc_bbu'], name='BB/U',
+                                marker_color='#f39c12', boxmean='sd'))
+        
+        fig_box.add_hline(y=-2, line_dash="dash", line_color="red", line_width=2)
+        fig_box.add_hline(y=-3, line_dash="dot", line_color="darkred", line_width=2)
+        
+        fig_box.update_layout(
+            title="Box Plot Perbandingan Z-Score",
+            yaxis_title="Z-Score",
+            template="plotly_white",
+            height=500,
+            showlegend=True
+        )
+        
+        st.plotly_chart(fig_box, use_container_width=True)
     
-    # Create map
-    fig = px.choropleth_mapbox(
-        gdf_map,
-        geojson=json.loads(gdf_map.to_json()),
-        locations=gdf_map.index,
-        color='prevalensi',
-        hover_name=name_col,
-        hover_data={
-            'jumlah_stunting': ':,.0f',
-            'total_balita': ':,.0f',
-            'prevalensi': ':.2f'
-        },
-        color_continuous_scale='YlOrRd',
-        mapbox_style='carto-positron',
-        zoom=zoom_level,
-        center={'lat': center_lat, 'lon': center_lon},
-        opacity=0.85,
-        labels={
-            'prevalensi': 'Prevalensi (%)',
-            'jumlah_stunting': 'Kasus Stunting',
-            'total_balita': 'Total Balita'
-        }
-    )
+    elif analysis_type == "Status Gizi":
+        st.markdown("### 🍽️ Analisis Status Gizi Komprehensif")
+        
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            st.markdown("#### 📏 Status TB/U (Tinggi/Umur)")
+            
+            status_tbu = filtered_df['status_tbu'].value_counts()
+            
+            # Pie chart dengan styling yang lebih baik
+            colors = ['#e74c3c', '#e67e22', '#f39c12', '#2ecc71', '#3498db']
+            
+            fig_tbu = go.Figure(data=[go.Pie(
+                labels=status_tbu.index,
+                values=status_tbu.values,
+                hole=0.4,
+                marker_colors=colors,
+                textposition='auto',
+                textinfo='label+percent',
+                hovertemplate='<b>%{label}</b><br>Jumlah: %{value}<br>Persentase: %{percent}<extra></extra>'
+            )])
+            
+            fig_tbu.update_layout(
+                title="Distribusi Status TB/U",
+                height=400,
+                showlegend=True,
+                legend=dict(orientation="v", yanchor="middle", y=0.5)
+            )
+            
+            st.plotly_chart(fig_tbu, use_container_width=True)
+            
+            # Metrics
+            stunting_count = len(filtered_df[filtered_df['status_tbu'].isin(['Pendek', 'Sangat Pendek'])])
+            st.metric("🔴 Total Pendek + Sangat Pendek", stunting_count,
+                     delta=f"{(stunting_count/len(filtered_df)*100):.1f}%",
+                     delta_color="inverse")
+        
+        with col2:
+            st.markdown("#### ⚖️ Status BB/TB (Berat/Tinggi)")
+            
+            status_bbtb = filtered_df['status_bbtb'].value_counts()
+            
+            fig_bbtb = go.Figure(data=[go.Pie(
+                labels=status_bbtb.index,
+                values=status_bbtb.values,
+                hole=0.4,
+                marker_colors=colors,
+                textposition='auto',
+                textinfo='label+percent',
+                hovertemplate='<b>%{label}</b><br>Jumlah: %{value}<br>Persentase: %{percent}<extra></extra>'
+            )])
+            
+            fig_bbtb.update_layout(
+                title="Distribusi Status BB/TB",
+                height=400,
+                showlegend=True,
+                legend=dict(orientation="v", yanchor="middle", y=0.5)
+            )
+            
+            st.plotly_chart(fig_bbtb, use_container_width=True)
+            
+            gizi_kurang = len(filtered_df[filtered_df['status_bbtb'].str.contains('Kurang|Buruk', na=False)])
+            st.metric("🟠 Total Gizi Kurang + Buruk", gizi_kurang,
+                     delta=f"{(gizi_kurang/len(filtered_df)*100):.1f}%",
+                     delta_color="inverse")
+        
+        with col3:
+            st.markdown("#### 🏋️ Status BB/U (Berat/Umur)")
+            
+            status_bbu = filtered_df['status_bbu'].value_counts()
+            
+            fig_bbu = go.Figure(data=[go.Pie(
+                labels=status_bbu.index,
+                values=status_bbu.values,
+                hole=0.4,
+                marker_colors=colors,
+                textposition='auto',
+                textinfo='label+percent',
+                hovertemplate='<b>%{label}</b><br>Jumlah: %{value}<br>Persentase: %{percent}<extra></extra>'
+            )])
+            
+            fig_bbu.update_layout(
+                title="Distribusi Status BB/U",
+                height=400,
+                showlegend=True,
+                legend=dict(orientation="v", yanchor="middle", y=0.5)
+            )
+            
+            st.plotly_chart(fig_bbu, use_container_width=True)
+            
+            bb_kurang = len(filtered_df[filtered_df['status_bbu'].str.contains('Kurang', na=False)])
+            st.metric("🟡 Total BB Kurang + Sangat Kurang", bb_kurang,
+                     delta=f"{(bb_kurang/len(filtered_df)*100):.1f}%",
+                     delta_color="inverse")
+        
+        st.markdown("---")
+        
+        # Crosstab analysis dengan styling lebih baik
+        st.markdown("### 🔄 Hubungan Status TB/U dan BB/TB")
+        st.caption("Analisis korelasi antara status tinggi badan dan berat badan balita")
+        
+        crosstab = pd.crosstab(filtered_df['status_tbu'], filtered_df['status_bbtb'], margins=True)
+        
+        # Heatmap yang lebih readable
+        fig_heatmap = go.Figure(data=go.Heatmap(
+            z=crosstab.values,
+            x=crosstab.columns,
+            y=crosstab.index,
+            colorscale='Reds',
+            text=crosstab.values,
+            texttemplate='%{text}',
+            textfont={"size": 14},
+            hovertemplate='TB/U: %{y}<br>BB/TB: %{x}<br>Jumlah: %{z}<extra></extra>',
+            colorbar=dict(title="Jumlah<br>Balita")
+        ))
+        
+        fig_heatmap.update_layout(
+            title="Heatmap Hubungan Status TB/U dan BB/TB",
+            xaxis_title="Status BB/TB",
+            yaxis_title="Status TB/U",
+            height=500,
+            template="plotly_white"
+        )
+        
+        st.plotly_chart(fig_heatmap, use_container_width=True)
+        
+        # Bar chart stacked untuk visualisasi alternatif
+        st.markdown("### 📊 Visualisasi Stacked")
+        
+        crosstab_pct = pd.crosstab(filtered_df['status_tbu'], filtered_df['status_bbtb'], normalize='index') * 100
+        
+        fig_stacked = go.Figure()
+        
+        for col in crosstab_pct.columns:
+            fig_stacked.add_trace(go.Bar(
+                name=col,
+                x=crosstab_pct.index,
+                y=crosstab_pct[col],
+                text=crosstab_pct[col].round(1),
+                texttemplate='%{text}%',
+                textposition='inside'
+            ))
+        
+        fig_stacked.update_layout(
+            barmode='stack',
+            title="Distribusi Status BB/TB per Kategori TB/U (%)",
+            xaxis_title="Status TB/U",
+            yaxis_title="Persentase (%)",
+            height=450,
+            template="plotly_white",
+            legend=dict(title="Status BB/TB")
+        )
+        
+        st.plotly_chart(fig_stacked, use_container_width=True)
     
-    fig.update_traces(marker_line_width=1, marker_line_color='white')
-    fig.update_layout(
-        height=700,
-        margin=dict(l=0, r=0, t=0, b=0),
-        coloraxis_colorbar=dict(
-            title=dict(
-                text="Prevalensi<br>Stunting (%)",
-                font=dict(size=14, family="Inter")
+    elif analysis_type == "Perbandingan Puskesmas":
+        st.markdown("### 🏥 Perbandingan Kinerja Antar Puskesmas")
+        
+        # Agregat data per puskesmas
+        pusk_stats = filtered_df.groupby('nama_puskesmas').agg({
+            'nama_balita': 'count',
+            'stunting_balita': lambda x: (x == 'Ya').sum(),
+            'zsc_tbu': 'mean',
+            'zsc_bbtb': 'mean',
+            'zsc_bbu': 'mean'
+        }).reset_index()
+        
+        pusk_stats.columns = ['Puskesmas', 'Total Balita', 'Jumlah Stunting', 
+                              'Rata-rata Z-Score TB/U', 'Rata-rata Z-Score BB/TB', 'Rata-rata Z-Score BB/U']
+        pusk_stats['Persentase Stunting (%)'] = (pusk_stats['Jumlah Stunting'] / pusk_stats['Total Balita'] * 100).round(2)
+        pusk_stats = pusk_stats.sort_values('Persentase Stunting (%)', ascending=False)
+        
+        # Summary metrics
+        col_sum1, col_sum2, col_sum3, col_sum4 = st.columns(4)
+        
+        col_sum1.metric("Jumlah Puskesmas", len(pusk_stats))
+        col_sum2.metric("Puskesmas Terbaik", 
+                       pusk_stats.iloc[-1]['Puskesmas'],
+                       delta=f"{pusk_stats.iloc[-1]['Persentase Stunting (%)']:.1f}%",
+                       delta_color="inverse")
+        col_sum3.metric("Puskesmas Prioritas",
+                       pusk_stats.iloc[0]['Puskesmas'],
+                       delta=f"{pusk_stats.iloc[0]['Persentase Stunting (%)']:.1f}%",
+                       delta_color="inverse")
+        col_sum4.metric("Rentang Prevalensi",
+                       f"{pusk_stats['Persentase Stunting (%)'].min():.1f}% - {pusk_stats['Persentase Stunting (%)'].max():.1f}%")
+        
+        st.markdown("---")
+        
+        # Bar chart yang lebih informatif
+        st.markdown("#### 📊 Persentase Stunting per Puskesmas")
+        
+        fig_pusk_pct = go.Figure()
+        
+        colors_bar = ['#e74c3c' if x > 20 else '#f39c12' if x > 10 else '#2ecc71' 
+                     for x in pusk_stats['Persentase Stunting (%)']]
+        
+        fig_pusk_pct.add_trace(go.Bar(
+            x=pusk_stats['Puskesmas'],
+            y=pusk_stats['Persentase Stunting (%)'],
+            marker_color=colors_bar,
+            text=pusk_stats['Persentase Stunting (%)'].round(1),
+            texttemplate='%{text}%',
+            textposition='outside',
+            hovertemplate='<b>%{x}</b><br>' +
+                         'Persentase: %{y:.1f}%<br>' +
+                         '<extra></extra>'
+        ))
+        
+        fig_pusk_pct.add_hline(y=pusk_stats['Persentase Stunting (%)'].mean(),
+                              line_dash="dash", line_color="red", line_width=2,
+                              annotation_text=f"Rata-rata: {pusk_stats['Persentase Stunting (%)'].mean():.1f}%",
+                              annotation_position="right")
+        
+        fig_pusk_pct.update_layout(
+            title="Prevalensi Stunting per Puskesmas",
+            xaxis_title="Puskesmas",
+            yaxis_title="Persentase Stunting (%)",
+            xaxis_tickangle=-45,
+            height=500,
+            template="plotly_white",
+            showlegend=False
+        )
+        
+        st.plotly_chart(fig_pusk_pct, use_container_width=True)
+        
+        st.markdown("---")
+        
+        # Comparison table dengan conditional formatting
+        st.markdown("#### 📋 Tabel Perbandingan Detail")
+        
+        # Style dataframe
+        def color_scale(val):
+            if val > 20:
+                return 'background-color: #ffcccc'
+            elif val > 10:
+                return 'background-color: #ffe6cc'
+            else:
+                return 'background-color: #ccffcc'
+        
+        styled_df = pusk_stats.style.applymap(
+            color_scale,
+            subset=['Persentase Stunting (%)']
+        ).format({
+            'Persentase Stunting (%)': '{:.2f}%',
+            'Rata-rata Z-Score TB/U': '{:.2f}',
+            'Rata-rata Z-Score BB/TB': '{:.2f}',
+            'Rata-rata Z-Score BB/U': '{:.2f}'
+        })
+        
+        st.dataframe(styled_df, use_container_width=True)
+        
+        st.markdown("---")
+        
+        # Z-Score comparison dengan grouped bar
+        st.markdown("#### 📈 Perbandingan Rata-rata Z-Score")
+        st.caption("Semakin rendah Z-Score, semakin buruk status gizi")
+        
+        fig_zscore_compare = go.Figure()
+        
+        fig_zscore_compare.add_trace(go.Bar(
+            x=pusk_stats['Puskesmas'],
+            y=pusk_stats['Rata-rata Z-Score TB/U'],
+            name='TB/U',
+            marker_color='#3498db',
+            text=pusk_stats['Rata-rata Z-Score TB/U'].round(2),
+            textposition='auto',
+            hovertemplate='<b>%{x}</b><br>Z-Score TB/U: %{y:.2f}<extra></extra>'
+        ))
+        fig_zscore_compare.add_trace(go.Bar(
+            x=pusk_stats['Puskesmas'],
+            y=pusk_stats['Rata-rata Z-Score BB/TB'],
+            name='BB/TB',
+            marker_color='#2ecc71',
+            text=pusk_stats['Rata-rata Z-Score BB/TB'].round(2),
+            textposition='auto',
+            hovertemplate='<b>%{x}</b><br>Z-Score BB/TB: %{y:.2f}<extra></extra>'
+        ))
+        fig_zscore_compare.add_trace(go.Bar(
+            x=pusk_stats['Puskesmas'],
+            y=pusk_stats['Rata-rata Z-Score BB/U'],
+            name='BB/U',
+            marker_color='#f39c12',
+            text=pusk_stats['Rata-rata Z-Score BB/U'].round(2),
+            textposition='auto',
+            hovertemplate='<b>%{x}</b><br>Z-Score BB/U: %{y:.2f}<extra></extra>'
+        ))
+        
+        fig_zscore_compare.add_hline(y=-2, line_dash="dash", line_color="red", line_width=2,
+                                     annotation_text="Batas Normal (Z=-2)", annotation_position="right")
+        fig_zscore_compare.add_hline(y=0, line_dash="dot", line_color="gray", line_width=1)
+        
+        fig_zscore_compare.update_layout(
+            title="Rata-rata Z-Score per Puskesmas (Grouped)",
+            xaxis_title="Puskesmas",
+            yaxis_title="Z-Score",
+            xaxis_tickangle=-45,
+            barmode='group',
+            height=550,
+            template="plotly_white",
+            legend=dict(
+                orientation="h",
+                yanchor="bottom",
+                y=1.02,
+                xanchor="right",
+                x=1
+            )
+        )
+        
+        st.plotly_chart(fig_zscore_compare, use_container_width=True)
+        
+        # Radar chart untuk perbandingan multi-dimensi
+        st.markdown("#### 🎯 Radar Chart Perbandingan")
+        st.caption("Visualisasi multi-dimensi kinerja puskesmas")
+        
+        # Normalize untuk radar chart
+        pusk_radar = pusk_stats.head(5).copy()  # Top 5 puskesmas
+        
+        fig_radar = go.Figure()
+        
+        for idx, row in pusk_radar.iterrows():
+            fig_radar.add_trace(go.Scatterpolar(
+                r=[
+                    row['Total Balita'] / pusk_radar['Total Balita'].max() * 100,
+                    100 - row['Persentase Stunting (%)'],  # Inverted (higher is better)
+                    (row['Rata-rata Z-Score TB/U'] + 5) / 5 * 100,  # Normalized
+                    (row['Rata-rata Z-Score BB/TB'] + 5) / 5 * 100,
+                    (row['Rata-rata Z-Score BB/U'] + 5) / 5 * 100
+                ],
+                theta=['Cakupan<br>Sampel', 'Tingkat<br>Kesehatan', 'Z-Score<br>TB/U', 
+                       'Z-Score<br>BB/TB', 'Z-Score<br>BB/U'],
+                fill='toself',
+                name=row['Puskesmas']
+            ))
+        
+        fig_radar.update_layout(
+            polar=dict(
+                radialaxis=dict(
+                    visible=True,
+                    range=[0, 100]
+                )
             ),
-            thickness=20,
-            len=0.7,
-            x=0.02,
-            xanchor="left"
+            height=600,
+            showlegend=True,
+            title="Perbandingan Multi-Dimensi (Top 5 Puskesmas)"
         )
-    )
-    
-    st.plotly_chart(fig, use_container_width=True)
-
-with col_rank:
-    st.markdown(f'<div class="section-header">⚠️ Top 5 {display_name}</div>', unsafe_allow_html=True)
-    st.markdown(f"<p style='color: #718096; font-weight: 600;'>Berdasarkan Prevalensi Tertinggi</p>", unsafe_allow_html=True)
-    
-    top_5 = map_data.head(5)
-    rank_classes = ['rank-1', 'rank-2', 'rank-3', 'rank-4', 'rank-5']
-    rank_emojis = ['🔴', '🟠', '🟡', '🟢', '🔵']
-    
-    for idx, (_, row) in enumerate(top_5.iterrows()):
-        rank = idx + 1
-        rank_class = rank_classes[idx] if idx < len(rank_classes) else 'rank-5'
-        rank_emoji = rank_emojis[idx] if idx < len(rank_emojis) else '🔴'
         
-        area_name = row[group_col]
+        st.plotly_chart(fig_radar, use_container_width=True)
+    
+    else:  # Tren Temporal
+        st.markdown("### 📅 Analisis Tren Temporal")
+        st.caption("Perkembangan kasus stunting dari waktu ke waktu")
         
-        st.markdown(f"""
-        <div class="top-kecamatan-card {rank_class}">
-            <div class="rank-badge">#{rank}</div>
-            <div style="display: flex; align-items: center; gap: 1.5rem; padding-right: 3rem;">
-                <span class="emoji-large">{rank_emoji}</span>
-                <div style="flex: 1;">
-                    <div class="kecamatan-name">{area_name.upper()}</div>
-                    <div class="percentage">{row['prevalensi']:.2f}%</div>
-                    <div class="count-info">
-                        💉 {int(row['jumlah_stunting'])} dari {int(row['total_balita'])} balita
-                    </div>
-                </div>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-
-# ===================== DATA TABLE =====================
-st.markdown(f'<div class="section-header">📋 Data Lengkap per {display_name}</div>', unsafe_allow_html=True)
-
-def style_prevalensi(val):
-    if val >= 50:
-        return 'background-color: #e74c3c; color: white; font-weight: bold;'
-    elif val >= 30:
-        return 'background-color: #f39c12; color: white; font-weight: bold;'
-    elif val >= 20:
-        return 'background-color: #f1c40f; font-weight: bold;'
-    elif val >= 10:
-        return 'background-color: #ffeda0; font-weight: bold;'
-    else:
-        return 'background-color: #2ecc71; color: white; font-weight: bold;'
-
-display_table = map_data.copy()
-display_table['Ranking'] = range(1, len(display_table) + 1)
-display_table = display_table[['Ranking', group_col, 'jumlah_stunting', 'total_balita', 'prevalensi']]
-display_table.columns = ['Ranking', display_name, 'Kasus Stunting', 'Total Balita', 'Prevalensi (%)']
-
-display_table['Kasus Stunting'] = display_table['Kasus Stunting'].astype(int)
-display_table['Total Balita'] = display_table['Total Balita'].astype(int)
-
-styled_table = display_table.style.applymap(
-    style_prevalensi,
-    subset=['Prevalensi (%)']
-).format({
-    'Kasus Stunting': '{:,}',
-    'Total Balita': '{:,}',
-    'Prevalensi (%)': '{:.2f}%'
-})
-
-st.dataframe(styled_table, use_container_width=True, height=400)
-
-# ===================== LEGEND =====================
-st.markdown('<div class="section-header">📌 Kategori Prevalensi Stunting</div>', unsafe_allow_html=True)
-
-legend_html = """
-<div class="legend-container">
-    <div class="legend-item">
-        <div class="legend-color" style="background: #e74c3c;"></div>
-        <div class="legend-text">🔴 Sangat Tinggi (≥50%) - Memerlukan intervensi segera</div>
-    </div>
-    <div class="legend-item">
-        <div class="legend-color" style="background: #f39c12;"></div>
-        <div class="legend-text">🟠 Tinggi (30-49%) - Perlu perhatian khusus</div>
-    </div>
-    <div class="legend-item">
-        <div class="legend-color" style="background: #f1c40f;"></div>
-        <div class="legend-text">🟡 Sedang (20-29%) - Monitoring ketat</div>
-    </div>
-    <div class="legend-item">
-        <div class="legend-color" style="background: #ffeda0;"></div>
-        <div class="legend-text">🟢 Rendah (10-19%) - Monitoring rutin</div>
-    </div>
-    <div class="legend-item">
-        <div class="legend-color" style="background: #2ecc71;"></div>
-        <div class="legend-text">✅ Sangat Rendah (&lt;10%) - Pertahankan program</div>
-    </div>
-</div>
-"""
-st.markdown(legend_html, unsafe_allow_html=True)
-
-# ===================== DOWNLOAD =====================
-st.markdown('<div class="section-header">💾 Unduh Data</div>', unsafe_allow_html=True)
-
-col_dl1, col_dl2 = st.columns(2)
-
-with col_dl1:
-    csv = display_table.to_csv(index=False).encode('utf-8')
-    st.download_button(
-        label="📥 Download Data CSV",
-        data=csv,
-        file_name=f"prevalensi_stunting_sidoarjo_{pd.Timestamp.now().strftime('%Y%m%d')}.csv",
-        mime="text/csv"
-    )
-
-with col_dl2:
-    try:
-        from io import BytesIO
-        buffer = BytesIO()
-        with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
-            display_table.to_excel(writer, index=False, sheet_name='Data Stunting')
+        # Group by date dengan periode yang lebih detail
+        temporal_data = filtered_df.groupby(filtered_df['tgl_pengambilan_data'].dt.to_period('M')).agg({
+            'nama_balita': 'count',
+            'stunting_balita': lambda x: (x == 'Ya').sum()
+        }).reset_index()
         
-        st.download_button(
-            label="📊 Download Data Excel",
-            data=buffer.getvalue(),
-            file_name=f"prevalensi_stunting_sidoarjo_{pd.Timestamp.now().strftime('%Y%m%d')}.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        temporal_data['tgl_pengambilan_data'] = temporal_data['tgl_pengambilan_data'].dt.to_timestamp()
+        temporal_data.columns = ['Bulan', 'Total Balita', 'Jumlah Stunting']
+        temporal_data['Persentase Stunting'] = (temporal_data['Jumlah Stunting'] / temporal_data['Total Balita'] * 100).round(2)
+        temporal_data = temporal_data.sort_values('Bulan')
+        
+        # Summary metrics
+        col_t1, col_t2, col_t3, col_t4 = st.columns(4)
+        
+        col_t1.metric("Total Periode", f"{len(temporal_data)} bulan")
+        col_t2.metric("Rata-rata Kasus/Bulan", f"{temporal_data['Jumlah Stunting'].mean():.1f}")
+        col_t3.metric("Bulan Tertinggi", 
+                     temporal_data.loc[temporal_data['Jumlah Stunting'].idxmax(), 'Bulan'].strftime('%b %Y'))
+        col_t4.metric("Total Kasus", f"{temporal_data['Jumlah Stunting'].sum():,}")
+        
+        st.markdown("---")
+        
+        # Line chart yang lebih informatif dengan dual axis
+        st.markdown("#### 📈 Tren Kasus dan Persentase Stunting")
+        
+        fig_trend = make_subplots(
+            specs=[[{"secondary_y": True}]]
         )
-    except:
-        st.info("Install openpyxl untuk download Excel: pip install openpyxl")
+        
+        # Jumlah kasus (primary y-axis)
+        fig_trend.add_trace(
+            go.Scatter(
+                x=temporal_data['Bulan'],
+                y=temporal_data['Jumlah Stunting'],
+                mode='lines+markers',
+                name='Jumlah Kasus',
+                line=dict(color='#e74c3c', width=3),
+                marker=dict(size=10, symbol='circle'),
+                fill='tozeroy',
+                fillcolor='rgba(231, 76, 60, 0.1)',
+                hovertemplate='<b>%{x|%B %Y}</b><br>Kasus: %{y}<extra></extra>'
+            ),
+            secondary_y=False
+        )
+        
+        # Persentase (secondary y-axis)
+        fig_trend.add_trace(
+            go.Scatter(
+                x=temporal_data['Bulan'],
+                y=temporal_data['Persentase Stunting'],
+                mode='lines+markers',
+                name='Persentase (%)',
+                line=dict(color='#3498db', width=3, dash='dash'),
+                marker=dict(size=10, symbol='diamond'),
+                hovertemplate='<b>%{x|%B %Y}</b><br>Persentase: %{y:.2f}%<extra></extra>'
+            ),
+            secondary_y=True
+        )
+        
+        # Average lines
+        avg_kasus = temporal_data['Jumlah Stunting'].mean()
+        avg_persen = temporal_data['Persentase Stunting'].mean()
+        
+        fig_trend.add_hline(y=avg_kasus, line_dash="dot", line_color="red",
+                           annotation_text=f"Rata-rata Kasus: {avg_kasus:.1f}",
+                           secondary_y=False)
+        fig_trend.add_hline(y=avg_persen, line_dash="dot", line_color="blue",
+                           annotation_text=f"Rata-rata %: {avg_persen:.1f}%",
+                           secondary_y=True, annotation_position="bottom right")
+        
+        fig_trend.update_xaxes(title_text="Periode")
+        fig_trend.update_yaxes(title_text="<b>Jumlah Kasus</b>", secondary_y=False)
+        fig_trend.update_yaxes(title_text="<b>Persentase (%)</b>", secondary_y=True)
+        
+        fig_trend.update_layout(
+            title="Tren Kasus Stunting Dari Waktu ke Waktu",
+            hovermode='x unified',
+            height=500,
+            template="plotly_white",
+            legend=dict(
+                orientation="h",
+                yanchor="bottom",
+                y=1.02,
+                xanchor="right",
+                x=1
+            )
+        )
+        
+        st.plotly_chart(fig_trend, use_container_width=True)
+        
+        st.markdown("---")
+        
+        # Area chart untuk total sampel
+        st.markdown("#### 📊 Volume Sampel Bulanan")
+        
+        fig_area = go.Figure()
+        
+        fig_area.add_trace(go.Scatter(
+            x=temporal_data['Bulan'],
+            y=temporal_data['Total Balita'],
+            mode='lines',
+            name='Total Balita',
+            line=dict(color='#9b59b6', width=2),
+            fill='tozeroy',
+            fillcolor='rgba(155, 89, 182, 0.3)',
+            hovertemplate='<b>%{x|%B %Y}</b><br>Total Sampel: %{y}<extra></extra>'
+        ))
+        
+        fig_area.update_layout(
+            title="Volume Sampel Balita per Bulan",
+            xaxis_title="Periode",
+            yaxis_title="Jumlah Balita",
+            height=400,
+            template="plotly_white"
+        )
+        
+        st.plotly_chart(fig_area, use_container_width=True)
+        
+        st.markdown("---")
+        
+        # Data table dengan formatting
+        st.markdown("#### 📋 Tabel Data Temporal")
+        
+        temporal_display = temporal_data.copy()
+        temporal_display['Bulan'] = temporal_display['Bulan'].dt.strftime('%B %Y')
+        
+        # Add trend indicators
+        temporal_display['Trend'] = ''
+        for i in range(1, len(temporal_display)):
+            if temporal_display.iloc[i]['Jumlah Stunting'] > temporal_display.iloc[i-1]['Jumlah Stunting']:
+                temporal_display.at[i, 'Trend'] = '📈 Naik'
+            elif temporal_display.iloc[i]['Jumlah Stunting'] < temporal_display.iloc[i-1]['Jumlah Stunting']:
+                temporal_display.at[i, 'Trend'] = '📉 Turun'
+            else:
+                temporal_display.at[i, 'Trend'] = '➡️ Stabil'
+        
+        st.dataframe(
+            temporal_display.style.format({
+                'Persentase Stunting': '{:.2f}%'
+            }),
+            use_container_width=True
+        )
+        
+        # Statistical summary
+        st.markdown("#### 📊 Ringkasan Statistik")
+        
+        col_stat1, col_stat2, col_stat3 = st.columns(3)
+        
+        with col_stat1:
+            st.write("**Kasus Stunting**")
+            st.write(f"- Min: {temporal_data['Jumlah Stunting'].min()}")
+            st.write(f"- Max: {temporal_data['Jumlah Stunting'].max()}")
+            st.write(f"- Std Dev: {temporal_data['Jumlah Stunting'].std():.2f}")
+        
+        with col_stat2:
+            st.write("**Persentase (%)**")
+            st.write(f"- Min: {temporal_data['Persentase Stunting'].min():.2f}%")
+            st.write(f"- Max: {temporal_data['Persentase Stunting'].max():.2f}%")
+            st.write(f"- Std Dev: {temporal_data['Persentase Stunting'].std():.2f}%")
+        
+        with col_stat3:
+            st.write("**Total Sampel**")
+            st.write(f"- Min: {temporal_data['Total Balita'].min()}")
+            st.write(f"- Max: {temporal_data['Total Balita'].max()}")
+            st.write(f"- Std Dev: {temporal_data['Total Balita'].std():.2f}")
 
-# ===================== FOOTER =====================
-st.markdown("---")
-st.markdown("""
-<div style="text-align: center; color: #718096; padding: 2rem;">
-    <p style="font-size: 0.9rem; margin: 0;">
-        📊 Dashboard Peta Prevalensi Stunting Kabupaten Sidoarjo
-    </p>
-    <p style="font-size: 0.8rem; margin-top: 0.5rem;">
-        Data diperbarui secara berkala | Untuk informasi lebih lanjut hubungi Dinas Kesehatan Sidoarjo
-    </p>
-</div>
-""", unsafe_allow_html=True)
+else:
+    st.error("❌ Data tidak dapat dimuat.")
+    st.info("Pastikan file data tersedia di: data/data_skrinning_stunting(1).csv")
